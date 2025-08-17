@@ -5,53 +5,209 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Copy } from "lucide-react"
+import { Copy, Loader2, Github, Key } from "lucide-react"
 import Navigation from "@/components/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
+interface RepoData {
+  name: string
+  description: string
+  language: string
+  topics: string[]
+  license: any
+  clone_url: string
+  html_url: string
+  owner: {
+    login: string
+  }
+}
+
+interface FileData {
+  name: string
+  content: string
+}
+
 export default function ReadmeGeneratorPage() {
-  const [readmeRepo, setReadmeRepo] = useState("")
+  const [repoUrl, setRepoUrl] = useState("")
+  const [githubToken, setGithubToken] = useState("")
   const [generatedReadme, setGeneratedReadme] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [showApiKeys, setShowApiKeys] = useState(false)
+  
 
-  const generateReadme = () => {
-    if (!readmeRepo) return
+  const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY 
 
-    const template = `# ${readmeRepo}
+  const parseGithubUrl = (url: string) => {
+    const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/)
+    if (match) {
+      return { owner: match[1], repo: match[2].replace('.git', '') }
+    }
+    return null
+  }
 
-**Description**  
-A brief description of what this project does and who it's for.
+  const fetchGithubRepo = async (owner: string, repo: string): Promise<RepoData> => {
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github.v3+json',
+    }
+    
+    if (githubToken) {
+      headers['Authorization'] = `token ${githubToken}`
+    }
 
-## Features
-- Feature 1
-- Feature 2
-- Feature 3
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers
+    })
+    
+    if (!response.ok) {
+      throw new Error(`GitHub API error: ${response.statusText}`)
+    }
+    
+    return await response.json()
+  }
 
-## Installation
-\`\`\`bash
-git clone https://github.com/username/${readmeRepo}.git
-cd ${readmeRepo}
-npm install
-\`\`\`
+  const fetchRepoFiles = async (owner: string, repo: string): Promise<FileData[]> => {
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github.v3+json',
+    }
+    
+    if (githubToken) {
+      headers['Authorization'] = `token ${githubToken}`
+    }
 
-## Usage
-\`\`\`bash
-npm start
-\`\`\`
+    try {
+      // Get repository contents
+      const contentsResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, {
+        headers
+      })
+      
+      if (!contentsResponse.ok) {
+        throw new Error(`GitHub API error: ${contentsResponse.statusText}`)
+      }
+      
+      const contents = await contentsResponse.json()
+      const files: FileData[] = []
+      
+      // Look for important files
+      const importantFiles = ['package.json', 'requirements.txt', 'Cargo.toml', 'go.mod', 'pom.xml', 'composer.json', 'Gemfile']
+      
+      for (const item of contents) {
+        if (importantFiles.includes(item.name) && item.type === 'file') {
+          try {
+            const fileResponse = await fetch(item.download_url)
+            const fileContent = await fileResponse.text()
+            files.push({ name: item.name, content: fileContent })
+          } catch (error) {
+            console.warn(`Failed to fetch ${item.name}:`, error)
+          }
+        }
+      }
+      
+      return files
+    } catch (error) {
+      console.warn('Failed to fetch repository files:', error)
+      return []
+    }
+  }
 
-## Contributing
-Contributions are welcome! Please feel free to submit a _Pull Request_.
+  const generateReadmeWithGemini = async (repoData: RepoData, files: FileData[]): Promise<string> => {
+    const filesInfo = files.map(f => `${f.name}:\n${f.content.slice(0, 1000)}`).join('\n\n')
+    
+    const prompt = `Generate a comprehensive README.md file for this GitHub repository:
 
-## License
-This project is licensed under the ~~MIT~~ **MIT** License.
+Repository Information:
+- Name: ${repoData.name}
+- Description: ${repoData.description || 'No description provided'}
+- Primary Language: ${repoData.language || 'Not specified'}
+- Topics/Tags: ${repoData.topics?.join(', ') || 'None'}
+- License: ${repoData.license?.name || 'Not specified'}
+- Owner: ${repoData.owner.login}
 
-## Author
-Your Name - [@yourusername](https://github.com/yourusername)
+Repository Files Analysis:
+${filesInfo}
 
-> Tip: Customize each section to suit your project structure!
-`
+Please generate a professional README.md that includes:
+1. Project title and description
+2. Features (inferred from the code/dependencies)
+3. Installation instructions (based on the project type)
+4. Usage examples
+5. API documentation (if applicable)
+6. Contributing guidelines
+7. License information
+8. Contact/author information
 
-    setGeneratedReadme(template)
+Make the README informative, well-structured, and include appropriate badges and formatting. Use markdown syntax and be specific about the technologies used based on the files provided.`
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 2048,
+        }
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(`Gemini API error: ${errorData.error?.message || response.statusText}`)
+    }
+
+    const data = await response.json()
+    
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      throw new Error('No content generated by Gemini API')
+    }
+    
+    return data.candidates[0].content.parts[0].text
+  }
+
+  const generateReadme = async () => {
+    if (!repoUrl) {
+      alert('Please provide repository URL')
+      return
+    }
+
+    if (!geminiApiKey) {
+      alert('No api key provided for Gemini')
+      return
+    }
+
+    const parsed = parseGithubUrl(repoUrl)
+    if (!parsed) {
+      alert('Invalid GitHub URL format')
+      return
+    }
+
+    setIsGenerating(true)
+    
+    try {
+      // Fetch repository data
+      const repoData = await fetchGithubRepo(parsed.owner, parsed.repo)
+      
+      // Fetch repository files
+      const files = await fetchRepoFiles(parsed.owner, parsed.repo)
+      
+      // Generate README with Gemini
+      const readme = await generateReadmeWithGemini(repoData, files)
+      
+      setGeneratedReadme(readme)
+    } catch (error) {
+      console.error('Error generating README:', error)
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const copyToClipboard = (text: string) => {
@@ -67,26 +223,68 @@ Your Name - [@yourusername](https://github.com/yourusername)
         <div className="p-4 sm:p-6 space-y-6">
           <Card className="bg-gray-800/50 border-4 border-white rounded-xl shadow">
             <CardHeader>
-              <CardTitle className="text-white font-black text-xl">README GENERATOR</CardTitle>
+              <CardTitle className="text-white font-black text-xl flex items-center gap-2">
+                <Github className="h-6 w-6" />
+                AI-Powered README GENERATOR
+              </CardTitle>
               <CardDescription className="text-gray-300 font-bold">
-                Generate a README using GitHub-style syntax
+                Generate README using GitHub API + Gemini AI analysis
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Enter repository name"
-                  value={readmeRepo}
-                  onChange={(e) => setReadmeRepo(e.target.value)}
+                  placeholder="Enter GitHub repository URL (e.g., https://github.com/user/repo)"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
                   className="bg-black/50 border-2 border-white rounded-xl text-white placeholder:text-gray-400 font-bold"
                 />
                 <Button
-                  onClick={generateReadme}
-                  className="bg-white hover:bg-gray-200 text-black rounded-xl border-2 border-white font-bold shadow"
+                  onClick={() => setShowApiKeys(!showApiKeys)}
+                  variant="outline"
+                  className="bg-gray-700 hover:bg-gray-600 text-white rounded-xl border-2 border-white font-bold"
                 >
-                  Generate
+                  <Key className="h-4 w-4" />
                 </Button>
               </div>
+
+              {showApiKeys && (
+                <div className="space-y-3 p-4 bg-black/30 rounded-xl border border-white/20">
+                  <div>
+                    <label className="text-white font-bold text-sm mb-1 block">
+                      GitHub Token (Optional - for private repos/higher rate limits)
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="ghp_..."
+                      value={githubToken}
+                      onChange={(e) => setGithubToken(e.target.value)}
+                      className="bg-black/50 border-2 border-white rounded-xl text-white placeholder:text-gray-400 font-bold"
+                    />
+                  </div>
+                  <p className="text-gray-400 text-xs">
+                     GitHub token is optional but recommended for better rate limits.
+                  </p>
+                </div>
+              )}
+
+              <Button
+                onClick={generateReadme}
+                disabled={isGenerating || !repoUrl}
+                className="w-full bg-white hover:bg-gray-200 text-black rounded-xl border-2 border-white font-bold shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Analyzing Repository & Generating...
+                  </>
+                ) : (
+                  <>
+                    <Github className="h-4 w-4 mr-2" />
+                    Generate AI README
+                  </>
+                )}
+              </Button>
             </CardContent>
           </Card>
 
@@ -111,7 +309,7 @@ Your Name - [@yourusername](https://github.com/yourusername)
                   <Textarea
                     value={generatedReadme}
                     onChange={(e) => setGeneratedReadme(e.target.value)}
-                    className="min-h-[300px] bg-black/50 border-2 border-white rounded-xl text-white font-mono text-sm"
+                    className="min-h-[400px] bg-black/50 border-2 border-white rounded-xl text-white font-mono text-sm"
                   />
                 </CardContent>
               </Card>
