@@ -69,16 +69,16 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="text-white font-black text-xl flex items-center gap-2">
                   <HelpCircle className="h-6 w-6" />
-                  INSTRUCTIONS
+                  Github User Stalker
                 </CardTitle>
                 <CardDescription className="text-gray-300 font-bold">
-                  Learn how to use all features of the GitHub Stats application effectively.
+                  Get to know the user through and through.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Link href="/instructions">
+                <Link href="/userProfileAnalyzer">
                   <Button className="w-full bg-white hover:bg-gray-200 text-black rounded-xl border-2 border-white font-bold shadow-[4px_4px_0px_0px_rgba(255,255,255,0.3)] group">
-                    View Instructions
+                    Get to Know the Github User
                     <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
