@@ -5,7 +5,7 @@ import Navigation from "@/components/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { Github, User, GitBranch, Star, MapPin, LinkIcon, Loader2 } from "lucide-react"
+import { Github, User, GitBranch, Star, MapPin, LinkIcon, Loader2, Brain, TrendingUp, Code, Users, Target, Lightbulb, Award } from "lucide-react"
 
 interface GitHubUser {
   login: string
@@ -31,6 +31,187 @@ interface GitHubRepo {
   created_at: string
   updated_at: string
   html_url: string
+}
+
+// Component to format and display AI analysis
+const FormattedAnalysis = ({ analysis }: { analysis: string }) => {
+  // Function to parse the analysis into sections
+  // Function to parse the analysis into sections
+const parseAnalysis = (text: string) => {
+  const sections = []
+  const lines = text.split('\n').filter(line => line.trim() !== '')
+  
+  let currentSection = { title: '', content: '', icon: Brain }
+  let isInSection = false
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim()
+    
+    // Check if this line is a section header - look for **text** or numbered sections
+    const boldHeaderMatch = trimmedLine.match(/^\*\*(.*?)\*\*$/)
+    const numberedHeaderMatch = trimmedLine.match(/^\*\*(\d+\.?\s*.*?)\*\*$/)
+    
+    const isHeader = (
+      boldHeaderMatch || 
+      numberedHeaderMatch ||
+      (trimmedLine.match(/^\d+\./) && trimmedLine.length < 100) ||
+      (trimmedLine.toLowerCase().includes('summary') && trimmedLine.length < 100) ||
+      (trimmedLine.toLowerCase().includes('assessment') && trimmedLine.length < 100) ||
+      (trimmedLine.toLowerCase().includes('analysis') && trimmedLine.length < 100) ||
+      (trimmedLine.toLowerCase().includes('expertise') && trimmedLine.length < 100) ||
+      (trimmedLine.toLowerCase().includes('involvement') && trimmedLine.length < 100) ||
+      (trimmedLine.toLowerCase().includes('recommendations') && trimmedLine.length < 100) ||
+      (trimmedLine.toLowerCase().includes('growth') && trimmedLine.length < 100)
+    )
+    
+    if (isHeader) {
+      // Save previous section if it exists
+      if (isInSection && currentSection.title) {
+        sections.push({ ...currentSection })
+      }
+      
+      // Extract title from bold markdown or use the line as-is
+      let title = trimmedLine
+      if (boldHeaderMatch) {
+        title = boldHeaderMatch[1]
+      } else if (numberedHeaderMatch) {
+        title = numberedHeaderMatch[1].replace(/^\d+\.?\s*/, '')
+      } else {
+        title = title.replace(/^\d+\.?\s*/, '')
+      }
+      
+      currentSection = {
+        title: title,
+        content: '',
+        icon: getSectionIcon(title)
+      }
+      isInSection = true
+    } else if (isInSection) {
+      // Add content to current section
+      currentSection.content += (currentSection.content ? '\n' : '') + trimmedLine
+    } else if (!isInSection) {
+      // Handle content before first section
+      if (!sections.length) {
+        sections.push({
+          title: 'Overview',
+          content: trimmedLine,
+          icon: Brain
+        })
+      } else {
+        sections[0].content += '\n' + trimmedLine
+      }
+    }
+  }
+  
+  // Add the last section
+  if (isInSection && currentSection.title) {
+    sections.push(currentSection)
+  }
+  
+  return sections.filter(section => section.content.trim() !== '')
+}
+  
+  // Function to get appropriate icon for each section
+  const getSectionIcon = (title: string) => {
+    const lowerTitle = title.toLowerCase()
+    if (lowerTitle.includes('summary') || lowerTitle.includes('profile')) return User
+    if (lowerTitle.includes('skill') || lowerTitle.includes('technical')) return Code
+    if (lowerTitle.includes('activity') || lowerTitle.includes('engagement')) return TrendingUp
+    if (lowerTitle.includes('quality') || lowerTitle.includes('impact')) return Award
+    if (lowerTitle.includes('expertise') || lowerTitle.includes('areas')) return Target
+    if (lowerTitle.includes('collaboration') || lowerTitle.includes('community')) return Users
+    if (lowerTitle.includes('recommendation') || lowerTitle.includes('growth')) return Lightbulb
+    return Brain
+  }
+  
+  // Function to format markdown-style bold text
+const formatMarkdownText = (text: string) => {
+  // Replace **text** with bold spans using a more direct approach
+  return text.split(/(\*\*[^*]+\*\*)/).map((part, index) => {
+    if (part.match(/^\*\*[^*]+\*\*$/)) {
+      const boldText = part.slice(2, -2)
+      return (
+        <span key={index} className="text-white font-black">
+          {boldText}
+        </span>
+      )
+    }
+    return part
+  })
+}
+
+  // Function to format content within each section
+// Function to format content within each section
+const formatContent = (content: string) => {
+  return content.split('\n').map((line, index) => {
+    const trimmedLine = line.trim()
+    if (!trimmedLine) return null
+    
+    // Check if it's a bullet point
+    if (trimmedLine.startsWith('*') && !trimmedLine.startsWith('**')) {
+      const bulletContent = trimmedLine.substring(1).trim()
+      return (
+        <li key={index} className="ml-4 text-gray-200 font-medium leading-relaxed list-disc">
+          <span>{formatMarkdownText(bulletContent)}</span>
+        </li>
+      )
+    }
+    
+    // Check if it's a sub-header (short line that might be a category)
+    if (trimmedLine.length < 80 && (trimmedLine.endsWith(':') || trimmedLine.match(/^\*\*[^*]+\*\*:?/))) {
+      const headerText = trimmedLine.replace(':', '')
+      return (
+        <h5 key={index} className="text-white font-bold mt-4 mb-2 text-lg">
+          <span>{formatMarkdownText(headerText)}</span>
+        </h5>
+      )
+    }
+    
+    // Regular paragraph
+    return (
+      <p key={index} className="text-gray-200 font-medium leading-relaxed mb-3">
+        <span>{formatMarkdownText(trimmedLine)}</span>
+      </p>
+    )
+  }).filter(Boolean)
+}
+  
+  const sections = parseAnalysis(analysis)
+  
+  if (sections.length === 0) {
+    return (
+      <div className="text-gray-200 font-medium leading-relaxed whitespace-pre-wrap">
+        {analysis}
+      </div>
+    )
+  }
+  
+  return (
+    <div className="space-y-6">
+      {sections.map((section, index) => {
+        const IconComponent = section.icon
+        return (
+          <div key={index} className="border-l-4 border-white pl-6">
+            <div className="flex items-center gap-3 mb-4">
+              <IconComponent className="h-6 w-6 text-white" />
+              <h4 className="text-xl font-black text-white">{section.title}</h4>
+            </div>
+            <div className="space-y-2">
+              {section.content.includes('-') || section.content.includes('•') || section.content.includes('*')? (
+                <ul className="space-y-2">
+                  {formatContent(section.content)}
+                </ul>
+              ) : (
+                <div>
+                  {formatContent(section.content)}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 export default function UserProfileAnalyzer() {
@@ -66,15 +247,14 @@ export default function UserProfileAnalyzer() {
 
 const analyzeWithGemini = async (user: GitHubUser, repositories: GitHubRepo[]) => {
   try {
-    // You'll need to get your API key from Google AI Studio
-    // https://makersuite.google.com/app/apikey
+    
     const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY 
     
     if (!GEMINI_API_KEY) {
       throw new Error('Gemini API key not configured. Please set NEXT_PUBLIC_GEMINI_API_KEY in your environment variables.')
     }
 
-    const prompt = `Analyze this GitHub profile and provide comprehensive insights:
+    const prompt = `Analyze this GitHub profile and provide comprehensive insights in a well-structured format:
 
 User Profile:
 - Name: ${user.name || user.login}
@@ -100,16 +280,17 @@ ${repositories
   )
   .join("")}
 
-Please provide:
+Please provide a detailed analysis with the following sections (use clear headings for each):
+
 1. Developer Profile Summary
-2. Technical Skills Assessment (based on repository languages and projects)
+2. Technical Skills Assessment
 3. Activity and Engagement Analysis
 4. Project Quality and Impact Assessment
 5. Areas of Expertise
 6. Collaboration and Community Involvement
 7. Recommendations for Growth
 
-Make the analysis detailed, professional, and actionable.`
+For each section, use bullet points where appropriate and provide specific, actionable insights. Make the analysis professional, detailed, and well-structured.`
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -325,13 +506,11 @@ Make the analysis detailed, professional, and actionable.`
           {/* AI Analysis */}
           {analysis && (
             <Card className="p-6 bg-gray-800/60 backdrop-blur-md border-4 border-white rounded-xl shadow-[8px_8px_0px_0px_rgba(255,255,255,0.3)]">
-              <h3 className="text-2xl font-black text-white mb-4 flex items-center gap-2">
-                <Star className="h-6 w-6" />
+              <h3 className="text-2xl font-black text-white mb-6 flex items-center gap-2">
+                <Brain className="h-6 w-6" />
                 AI Analysis Report
               </h3>
-              <div className="prose prose-invert max-w-none">
-                <div className="text-gray-200 font-medium whitespace-pre-wrap leading-relaxed">{analysis}</div>
-              </div>
+              <FormattedAnalysis analysis={analysis} />
             </Card>
           )}
 
