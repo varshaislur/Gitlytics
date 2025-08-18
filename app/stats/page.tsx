@@ -5,13 +5,51 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Github, Star, GitFork, Eye, Calendar } from "lucide-react"
+import { Github, Star, GitFork, Eye, Calendar, ChevronDown, ChevronUp, GitCommit, User, Clock } from "lucide-react"
 import Navigation from "@/components/navigation"
+
+interface Commit {
+  sha: string
+  commit: {
+    message: string
+    author: {
+      name: string
+      date: string
+    }
+  }
+  author: {
+    login?: string
+    avatar_url?: string
+  } | null
+}
 
 export default function StatsPage() {
   const [repoUrl, setRepoUrl] = useState("")
   const [repoData, setRepoData] = useState<any>(null)
+  const [commits, setCommits] = useState<Commit[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingCommits, setLoadingCommits] = useState(false)
+  const [showCommits, setShowCommits] = useState(false)
+
+  const fetchCommits = async (owner: string, repo: string) => {
+    setLoadingCommits(true)
+    try {
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=100`)
+      const data = await response.json()
+      
+      if (response.ok) {
+        setCommits(data)
+      } else {
+        console.error("Failed to fetch commits:", data.message)
+        setCommits([])
+      }
+    } catch (error) {
+      console.error("Error fetching commits:", error)
+      setCommits([])
+    } finally {
+      setLoadingCommits(false)
+    }
+  }
 
   const fetchRepoStats = async () => {
     if (!repoUrl) return
@@ -28,6 +66,8 @@ export default function StatsPage() {
 
       if (response.ok) {
         setRepoData(data)
+        // Fetch commits automatically
+        await fetchCommits(owner, repo)
       } else {
         throw new Error(data.message || "Failed to fetch repository")
       }
@@ -37,6 +77,25 @@ export default function StatsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const toggleCommits = () => {
+    setShowCommits(!showCommits)
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const truncateMessage = (message: string, maxLength: number = 80) => {
+    const firstLine = message.split('\n')[0]
+    return firstLine.length > maxLength ? firstLine.substring(0, maxLength) + '...' : firstLine
   }
 
   return (
@@ -141,6 +200,76 @@ export default function StatsPage() {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {repoData && (
+            <Card className="bg-gray-800/50 border-4 border-white rounded-xl shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-white font-black flex items-center gap-2">
+                    <GitCommit className="h-5 w-5" />
+                    RECENT COMMITS
+                  </CardTitle>
+                  <Button
+                    onClick={toggleCommits}
+                    variant="ghost"
+                    className="text-white hover:bg-gray-700 p-2"
+                  >
+                    {showCommits ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </Button>
+                </div>
+                <CardDescription className="text-gray-300 font-bold">
+                  Latest 100 commits from the repository
+                </CardDescription>
+              </CardHeader>
+              
+              {showCommits && (
+                <CardContent>
+                  {loadingCommits ? (
+                    <div className="text-white font-bold text-center py-4">Loading commits...</div>
+                  ) : commits.length > 0 ? (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {commits.map((commit) => (
+                        <div
+                          key={commit.sha}
+                          className="bg-gray-700/50 border-2 border-gray-600 rounded-lg p-4 space-y-2"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-bold text-sm leading-tight">
+                                {truncateMessage(commit.commit.message)}
+                              </p>
+                            </div>
+                            <Badge className="bg-gray-600 text-white font-bold border border-gray-500 ml-2 text-xs">
+                              {commit.sha.substring(0, 7)}
+                            </Badge>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2 text-gray-300">
+                              <User className="h-3 w-3" />
+                              <span className="font-bold">
+                                {commit.author?.login || commit.commit.author.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-gray-400">
+                              <Clock className="h-3 w-3" />
+                              <span className="font-bold">
+                                {formatDate(commit.commit.author.date)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-gray-400 font-bold text-center py-4">
+                      No commits found or failed to load commits.
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
           )}
         </div>
       </div>

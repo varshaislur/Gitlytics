@@ -36,7 +36,6 @@ interface GitHubRepo {
 // Component to format and display AI analysis
 const FormattedAnalysis = ({ analysis }: { analysis: string }) => {
   // Function to parse the analysis into sections
-  // Function to parse the analysis into sections
 const parseAnalysis = (text: string) => {
   const sections = []
   const lines = text.split('\n').filter(line => line.trim() !== '')
