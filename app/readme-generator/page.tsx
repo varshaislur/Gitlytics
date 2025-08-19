@@ -9,6 +9,7 @@ import { Copy, Loader2, Github, Key } from "lucide-react"
 import Navigation from "@/components/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import 'github-markdown-css/github-markdown.css';
 
 interface RepoData {
   name: string
@@ -136,7 +137,8 @@ Please generate a professional README.md that includes:
 7. License information
 8. Contact/author information
 
-Make the README informative, well-structured, and include appropriate badges and formatting. Use markdown syntax and be specific about the technologies used based on the files provided.`
+Make the README informative, well-structured, and include appropriate badges and formatting. Use markdown syntax and be specific about the technologies used based on the files provided.
+do not write markdown at the start of the file, just write the content directly.`
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
@@ -319,7 +321,7 @@ Make the README informative, well-structured, and include appropriate badges and
                 <CardHeader>
                   <CardTitle className="text-white font-black">Live Preview</CardTitle>
                 </CardHeader>
-                <CardContent className="prose prose-invert max-w-none text-white">
+                <CardContent className="markdown-body">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {generatedReadme}
                   </ReactMarkdown>
