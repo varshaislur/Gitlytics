@@ -4,8 +4,8 @@ import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'GitHub Stats & README Generator',
+  description: 'Analyze GitHub repositories and generate professional README files with ease.',
   generator: 'v0.app',
 }
 
